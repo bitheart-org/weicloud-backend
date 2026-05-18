@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
@@ -31,7 +32,7 @@ type Instance struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
-func (i *Instance) BeforeCreate() error {
+func (i *Instance) BeforeCreate(_ *gorm.DB) error {
 	if i.ID == uuid.Nil {
 		i.ID = uuid.New()
 	}

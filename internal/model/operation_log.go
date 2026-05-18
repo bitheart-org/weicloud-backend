@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type OperationLog struct {
@@ -15,7 +16,7 @@ type OperationLog struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
-func (o *OperationLog) BeforeCreate() error {
+func (o *OperationLog) BeforeCreate(_ *gorm.DB) error {
 	if o.ID == uuid.Nil {
 		o.ID = uuid.New()
 	}
