@@ -57,6 +57,13 @@ type Manager struct {
 	clients map[string]*hostClient
 }
 
+func IsNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "status=404")
+}
+
 func NewManager() *Manager {
 	return &Manager{
 		clients: make(map[string]*hostClient),

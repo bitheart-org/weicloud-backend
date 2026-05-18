@@ -122,20 +122,31 @@ func (s *VMService) Delete(ctx context.Context, vmID string, actorUserID string)
 	if err != nil {
 		return err
 	}
+
+	detail := "destroy vm " + vm.Name
 	host, err := s.hostService.GetByID(vm.HostID.String())
 	if err != nil {
-		return err
-	}
-
-	_ = s.incus.SetInstanceState(ctx, host, vm.IncusInstance, "stop", true)
-	if err := s.incus.DeleteInstance(ctx, host, vm.IncusInstance); err != nil {
-		return err
+		if vm.Status != model.InstanceStatusError {
+			return err
+		}
+		detail = "destroy errored vm record " + vm.Name
+	} else {
+		_ = s.incus.SetInstanceState(ctx, host, vm.IncusInstance, "stop", true)
+		if err := s.incus.DeleteInstance(ctx, host, vm.IncusInstance); err != nil {
+			if incus.IsNotFoundError(err) {
+				detail = "destroy vm record (instance missing) " + vm.Name
+			} else if vm.Status == model.InstanceStatusError {
+				detail = "destroy errored vm record " + vm.Name
+			} else {
+				return err
+			}
+		}
 	}
 
 	if err := s.db.Delete(&model.Instance{}, "id = ?", vmID).Error; err != nil {
 		return fmt.Errorf("delete instance record: %w", err)
 	}
-	return s.logOperation(actorUserID, &vm.ID, "destroy", "destroy vm "+vm.Name)
+	return s.logOperation(actorUserID, &vm.ID, "destroy", detail)
 }
 
 func (s *VMService) UpdateConfig(ctx context.Context, vmID string, req dto.UpdateVMConfigRequest, actorUserID string) (model.Instance, error) {
