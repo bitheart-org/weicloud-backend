@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"weicloud-backend/internal/model"
 )
 
@@ -372,6 +374,55 @@ func (m *Manager) ResetRootPassword(ctx context.Context, host model.Host, instan
 	return m.waitOperation(ctx, client, operationResp.Operation, 30)
 }
 
+func (m *Manager) OpenVNCConnection(ctx context.Context, host model.Host, instanceName string) (*websocket.Conn, error) {
+	client, err := m.getOrCreateClient(host)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := m.doJSONRaw(
+		ctx,
+		client,
+		http.MethodPost,
+		"/1.0/instances/"+url.PathEscape(instanceName)+"/console",
+		map[string]any{
+			"type": "vga",
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var consoleResp struct {
+		Operation string `json:"operation"`
+	}
+	if err := json.Unmarshal(raw, &consoleResp); err != nil {
+		return nil, fmt.Errorf("decode open console response: %w", err)
+	}
+	if consoleResp.Operation == "" {
+		return nil, fmt.Errorf("missing console operation id")
+	}
+
+	secret, err := m.getOperationWebsocketSecret(ctx, client, consoleResp.Operation)
+	if err != nil {
+		return nil, err
+	}
+
+	wsURL, err := buildOperationWebsocketURL(client.baseURL, consoleResp.Operation, secret)
+	if err != nil {
+		return nil, err
+	}
+
+	dialer := websocket.Dialer{
+		TLSClientConfig: extractTLSConfig(client),
+	}
+	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("dial vnc websocket: %w", err)
+	}
+	return conn, nil
+}
+
 func (m *Manager) getOrCreateClient(host model.Host) (*hostClient, error) {
 	hostID := host.ID.String()
 	m.mu.RLock()
@@ -525,6 +576,67 @@ func (m *Manager) waitOperation(ctx context.Context, client *hostClient, operati
 		return fmt.Errorf("operation failed status: %s", operationResp.Metadata.Status)
 	}
 	return nil
+}
+
+func (m *Manager) getOperationWebsocketSecret(ctx context.Context, client *hostClient, operationPath string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, client.baseURL+operationPath, nil)
+	if err != nil {
+		return "", fmt.Errorf("build operation request: %w", err)
+	}
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request operation metadata: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("operation metadata status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var operationResp struct {
+		Metadata struct {
+			Fds map[string]string `json:"fds"`
+		} `json:"metadata"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&operationResp); err != nil {
+		return "", fmt.Errorf("decode operation metadata: %w", err)
+	}
+	secret := operationResp.Metadata.Fds["0"]
+	if secret == "" {
+		return "", fmt.Errorf("missing operation websocket secret")
+	}
+	return secret, nil
+}
+
+func buildOperationWebsocketURL(baseURL, operationPath, secret string) (string, error) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("parse host url: %w", err)
+	}
+	switch parsed.Scheme {
+	case "https":
+		parsed.Scheme = "wss"
+	case "http":
+		parsed.Scheme = "ws"
+	default:
+		return "", fmt.Errorf("unsupported host scheme: %s", parsed.Scheme)
+	}
+	parsed.Path = operationPath + "/websocket"
+	query := url.Values{}
+	query.Set("secret", secret)
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func extractTLSConfig(client *hostClient) *tls.Config {
+	transport, ok := client.httpClient.Transport.(*http.Transport)
+	if !ok {
+		return nil
+	}
+	if transport.TLSClientConfig == nil {
+		return nil
+	}
+	return transport.TLSClientConfig.Clone()
 }
 
 func extractCPUCores(metadata map[string]any) int {

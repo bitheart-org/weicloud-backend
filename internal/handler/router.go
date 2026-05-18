@@ -16,6 +16,8 @@ type RouterDeps struct {
 	AdminVMHandler     *AdminVMHandler
 	AdminSystemHandler *AdminSystemHandler
 	UserVMHandler      *UserVMHandler
+	UserVNCHandler     *UserVNCHandler
+	VNCWSHandler       *VNCWSHandler
 	AuthMiddleware     gin.HandlerFunc
 }
 
@@ -25,6 +27,7 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 			"status": "ok",
 		})
 	})
+	r.GET("/ws/vnc/:id", deps.VNCWSHandler.Proxy)
 
 	api := r.Group("/api")
 
@@ -73,6 +76,7 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 		userGroup.POST("/vms/:id/stop", deps.UserVMHandler.Stop)
 		userGroup.POST("/vms/:id/reboot", deps.UserVMHandler.Reboot)
 		userGroup.POST("/vms/:id/password", deps.UserVMHandler.ResetPassword)
+		userGroup.POST("/vms/:id/vnc-token", deps.UserVNCHandler.IssueToken)
 		userGroup.GET("/vms/:id/resource", deps.UserVMHandler.Resource)
 	}
 }

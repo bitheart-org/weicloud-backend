@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 
 	"weicloud-backend/internal/dto"
@@ -348,6 +350,29 @@ func (s *VMService) ResetRootPasswordForOwner(ctx context.Context, vmID string, 
 		return "", err
 	}
 	return password, nil
+}
+
+func (s *VMService) EnsureOwner(vmID, ownerID string) (model.Instance, error) {
+	return s.GetByIDForOwner(vmID, ownerID)
+}
+
+func (s *VMService) OpenVNCForOwner(ctx context.Context, vmID, ownerID string) (*websocket.Conn, error) {
+	vm, err := s.GetByIDForOwner(vmID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	host, err := s.hostService.GetByID(vm.HostID.String())
+	if err != nil {
+		return nil, err
+	}
+	return s.incus.OpenVNCConnection(ctx, host, vm.IncusInstance)
+}
+
+func (s *VMService) IssueVNCOneTimeToken(vncService *VNCService, vmID, ownerID string) (string, error) {
+	if _, err := s.GetByIDForOwner(vmID, ownerID); err != nil {
+		return "", err
+	}
+	return vncService.IssueToken(ownerID, vmID, time.Minute), nil
 }
 
 func (s *VMService) getResource(ctx context.Context, vm model.Instance) (dto.VMResourcePayload, error) {
