@@ -14,10 +14,23 @@ type InstancePayload struct {
 	DiskRootBytes  int64     `json:"disk_root_bytes"`
 	NetworkIngress string    `json:"network_ingress"`
 	NetworkEgress  string    `json:"network_egress"`
+	LoginUsername  string    `json:"login_username"`
+	SSHRemotePort  int       `json:"ssh_remote_port"`
 	Status         string    `json:"status"`
 	VNCEnabled     bool      `json:"vnc_enabled"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type VMAccessPayload struct {
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	SSHRemotePort int    `json:"ssh_remote_port"`
+}
+
+type CreateVMResponse struct {
+	VM     InstancePayload `json:"vm"`
+	Access VMAccessPayload `json:"access"`
 }
 
 type CreateVMRequest struct {
@@ -55,5 +68,14 @@ type MigrateVMRequest struct {
 }
 
 type ResetRootPasswordResponse struct {
+	NewPassword string `json:"new_password"`
+}
+
+type UpdateLoginPasswordRequest struct {
+	Password string `json:"password" binding:"required,min=8,max=128"`
+}
+
+type UpdateLoginPasswordResponse struct {
+	Username    string `json:"username"`
 	NewPassword string `json:"new_password"`
 }

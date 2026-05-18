@@ -20,13 +20,23 @@ type VMService struct {
 	db          *gorm.DB
 	hostService *HostService
 	incus       *incus.Manager
+	provision   VMProvisionConfig
 }
 
-func NewVMService(db *gorm.DB, hostService *HostService, incusManager *incus.Manager) *VMService {
+type VMProvisionConfig struct {
+	DefaultUsername string
+	FRPSServerAddr  string
+	FRPSServerPort  int
+	FRPSToken       string
+	RemotePortStart int
+}
+
+func NewVMService(db *gorm.DB, hostService *HostService, incusManager *incus.Manager, provision VMProvisionConfig) *VMService {
 	return &VMService{
 		db:          db,
 		hostService: hostService,
 		incus:       incusManager,
+		provision:   provision,
 	}
 }
 
@@ -62,10 +72,25 @@ func (s *VMService) GetByIDForOwner(id, ownerID string) (model.Instance, error) 
 	return item, nil
 }
 
-func (s *VMService) Create(ctx context.Context, req dto.CreateVMRequest, actorUserID string) (model.Instance, error) {
+func (s *VMService) Create(ctx context.Context, req dto.CreateVMRequest, actorUserID string) (model.Instance, dto.VMAccessPayload, error) {
+	if s.provision.FRPSServerAddr == "" || s.provision.FRPSToken == "" {
+		return model.Instance{}, dto.VMAccessPayload{}, fmt.Errorf("frps config is not set")
+	}
 	host, err := s.hostService.GetByID(req.HostID)
 	if err != nil {
-		return model.Instance{}, err
+		return model.Instance{}, dto.VMAccessPayload{}, err
+	}
+	sshRemotePort, err := s.nextSSHRemotePort()
+	if err != nil {
+		return model.Instance{}, dto.VMAccessPayload{}, err
+	}
+	loginUsername := s.provision.DefaultUsername
+	if loginUsername == "" {
+		loginUsername = "weicloud"
+	}
+	loginPassword, err := generatePassword(16)
+	if err != nil {
+		return model.Instance{}, dto.VMAccessPayload{}, fmt.Errorf("generate login password: %w", err)
 	}
 
 	instance := model.Instance{
@@ -78,19 +103,21 @@ func (s *VMService) Create(ctx context.Context, req dto.CreateVMRequest, actorUs
 		DiskRootBytes:  req.DiskRootBytes,
 		NetworkIngress: req.NetworkIngress,
 		NetworkEgress:  req.NetworkEgress,
+		LoginUsername:  loginUsername,
+		SSHRemotePort:  sshRemotePort,
 		Status:         model.InstanceStatusCreating,
 	}
 
 	if req.OwnerID != "" {
 		ownerUUID, parseErr := uuid.Parse(req.OwnerID)
 		if parseErr != nil {
-			return model.Instance{}, fmt.Errorf("invalid owner id: %w", parseErr)
+			return model.Instance{}, dto.VMAccessPayload{}, fmt.Errorf("invalid owner id: %w", parseErr)
 		}
 		instance.OwnerID = &ownerUUID
 	}
 
 	if err := s.db.Create(&instance).Error; err != nil {
-		return model.Instance{}, fmt.Errorf("create instance record: %w", err)
+		return model.Instance{}, dto.VMAccessPayload{}, fmt.Errorf("create instance record: %w", err)
 	}
 
 	createErr := s.incus.CreateInstance(ctx, host, incus.InstanceCreateRequest{
@@ -101,20 +128,34 @@ func (s *VMService) Create(ctx context.Context, req dto.CreateVMRequest, actorUs
 		DiskRootBytes:  req.DiskRootBytes,
 		NetworkIngress: req.NetworkIngress,
 		NetworkEgress:  req.NetworkEgress,
+		LoginUsername:  loginUsername,
+		LoginPassword:  loginPassword,
+		FRPSServerAddr: s.provision.FRPSServerAddr,
+		FRPSServerPort: s.provision.FRPSServerPort,
+		FRPSToken:      s.provision.FRPSToken,
+		SSHRemotePort:  sshRemotePort,
 	})
 	if createErr != nil {
 		_ = s.db.Model(&model.Instance{}).Where("id = ?", instance.ID).Update("status", model.InstanceStatusError).Error
-		return model.Instance{}, fmt.Errorf("create instance on host: %w", createErr)
+		return model.Instance{}, dto.VMAccessPayload{}, fmt.Errorf("create instance on host: %w", createErr)
 	}
 
 	if err := s.db.Model(&model.Instance{}).Where("id = ?", instance.ID).Update("status", model.InstanceStatusStopped).Error; err != nil {
-		return model.Instance{}, fmt.Errorf("update instance status: %w", err)
+		return model.Instance{}, dto.VMAccessPayload{}, fmt.Errorf("update instance status: %w", err)
 	}
 
 	if err := s.logOperation(actorUserID, &instance.ID, "create", "create vm "+instance.Name); err != nil {
-		return model.Instance{}, err
+		return model.Instance{}, dto.VMAccessPayload{}, err
 	}
-	return s.GetByID(instance.ID.String())
+	created, err := s.GetByID(instance.ID.String())
+	if err != nil {
+		return model.Instance{}, dto.VMAccessPayload{}, err
+	}
+	return created, dto.VMAccessPayload{
+		Username:      loginUsername,
+		Password:      loginPassword,
+		SSHRemotePort: sshRemotePort,
+	}, nil
 }
 
 func (s *VMService) Delete(ctx context.Context, vmID string, actorUserID string) error {
@@ -363,6 +404,24 @@ func (s *VMService) ResetRootPasswordForOwner(ctx context.Context, vmID string, 
 	return password, nil
 }
 
+func (s *VMService) UpdateLoginPasswordForOwner(ctx context.Context, vmID, ownerID, newPassword string) (string, error) {
+	vm, err := s.GetByIDForOwner(vmID, ownerID)
+	if err != nil {
+		return "", err
+	}
+	host, err := s.hostService.GetByID(vm.HostID.String())
+	if err != nil {
+		return "", err
+	}
+	if err := s.incus.SetUserPassword(ctx, host, vm.IncusInstance, vm.LoginUsername, newPassword); err != nil {
+		return "", err
+	}
+	if err := s.logOperation(ownerID, &vm.ID, "password_update", "update login password for vm "+vm.Name); err != nil {
+		return "", err
+	}
+	return vm.LoginUsername, nil
+}
+
 func (s *VMService) EnsureOwner(vmID, ownerID string) (model.Instance, error) {
 	return s.GetByIDForOwner(vmID, ownerID)
 }
@@ -419,11 +478,28 @@ func ToInstancePayload(vm model.Instance) dto.InstancePayload {
 		DiskRootBytes:  vm.DiskRootBytes,
 		NetworkIngress: vm.NetworkIngress,
 		NetworkEgress:  vm.NetworkEgress,
+		LoginUsername:  vm.LoginUsername,
+		SSHRemotePort:  vm.SSHRemotePort,
 		Status:         vm.Status,
 		VNCEnabled:     vm.VNCEnabled,
 		CreatedAt:      vm.CreatedAt,
 		UpdatedAt:      vm.UpdatedAt,
 	}
+}
+
+func (s *VMService) nextSSHRemotePort() (int, error) {
+	start := s.provision.RemotePortStart
+	if start <= 0 {
+		start = 30900
+	}
+	var currentMax int
+	if err := s.db.Model(&model.Instance{}).Select("COALESCE(MAX(ssh_remote_port), 0)").Scan(&currentMax).Error; err != nil {
+		return 0, fmt.Errorf("query max ssh remote port: %w", err)
+	}
+	if currentMax < start {
+		return start, nil
+	}
+	return currentMax + 1, nil
 }
 
 func (s *VMService) logOperation(actorUserID string, instanceID *uuid.UUID, action, detail string) error {
@@ -444,7 +520,7 @@ func (s *VMService) logOperation(actorUserID string, instanceID *uuid.UUID, acti
 }
 
 func generatePassword(length int) (string, error) {
-	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
 	password := make([]byte, length)
 	for i := range password {
 		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))

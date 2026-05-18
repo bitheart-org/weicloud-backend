@@ -46,12 +46,15 @@ func (h *AdminVMHandler) Create(c *gin.Context) {
 		return
 	}
 
-	vm, err := h.vmService.Create(c.Request.Context(), req, claims.UserID)
+	vm, access, err := h.vmService.Create(c.Request.Context(), req, claims.UserID)
 	if err != nil {
 		fail(c, http.StatusBadRequest, errcode.AdminVMCreateFailed, "create vm failed")
 		return
 	}
-	ok(c, service.ToInstancePayload(vm))
+	ok(c, dto.CreateVMResponse{
+		VM:     service.ToInstancePayload(vm),
+		Access: access,
+	})
 }
 
 func (h *AdminVMHandler) Delete(c *gin.Context) {

@@ -113,3 +113,29 @@ func (h *UserVMHandler) ResetPassword(c *gin.Context) {
 	}
 	ok(c, dto.ResetRootPasswordResponse{NewPassword: password})
 }
+
+func (h *UserVMHandler) UpdateLoginPassword(c *gin.Context) {
+	claims, exists := middleware.CurrentUserClaims(c)
+	if !exists {
+		fail(c, http.StatusUnauthorized, errcode.UserVMResetPasswordUnauthorized, "unauthorized")
+		return
+	}
+	var req dto.UpdateLoginPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, errcode.UserVMUpdatePasswordInvalidInput, "invalid request")
+		return
+	}
+	username, err := h.vmService.UpdateLoginPasswordForOwner(c.Request.Context(), c.Param("id"), claims.UserID, req.Password)
+	if err != nil {
+		if service.IsNotFound(err) {
+			fail(c, http.StatusNotFound, errcode.UserVMNotFoundForResetPassword, "vm not found")
+			return
+		}
+		fail(c, http.StatusBadGateway, errcode.UserVMUpdatePasswordFailed, "update vm password failed")
+		return
+	}
+	ok(c, dto.UpdateLoginPasswordResponse{
+		Username:    username,
+		NewPassword: req.Password,
+	})
+}

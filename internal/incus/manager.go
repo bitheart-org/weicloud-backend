@@ -33,6 +33,12 @@ type InstanceCreateRequest struct {
 	DiskRootBytes  int64
 	NetworkIngress string
 	NetworkEgress  string
+	LoginUsername  string
+	LoginPassword  string
+	FRPSServerAddr string
+	FRPSServerPort int
+	FRPSToken      string
+	SSHRemotePort  int
 }
 
 type ImageInfo struct {
@@ -138,8 +144,10 @@ func (m *Manager) CreateInstance(ctx context.Context, host model.Host, req Insta
 			"server":   "https://images.linuxcontainers.org",
 		},
 		"config": map[string]string{
-			"limits.cpu":    fmt.Sprintf("%d", req.CPUCores),
-			"limits.memory": fmt.Sprintf("%d", req.MemoryBytes),
+			"limits.cpu":     fmt.Sprintf("%d", req.CPUCores),
+			"limits.memory":  fmt.Sprintf("%d", req.MemoryBytes),
+			"agent":          "enabled",
+			"user.user-data": buildCloudInit(req),
 		},
 		"devices": map[string]map[string]string{
 			"root": {
@@ -162,6 +170,64 @@ func (m *Manager) CreateInstance(ctx context.Context, host model.Host, req Insta
 		payload["devices"].(map[string]map[string]string)["eth0"]["limits.egress"] = req.NetworkEgress
 	}
 	return m.doJSON(ctx, client, http.MethodPost, "/1.0/instances", payload)
+}
+
+func buildCloudInit(req InstanceCreateRequest) string {
+	return fmt.Sprintf(`#cloud-config
+users:
+  - default
+  - name: %s
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+ssh_pwauth: true
+chpasswd:
+  expire: false
+  list:
+    - %s:%s
+write_files:
+  - path: /etc/frp/frpc.toml
+    permissions: "0600"
+    content: |
+      serverAddr = "%s"
+      serverPort = %d
+      auth.method = "token"
+      auth.token = "%s"
+
+      [[proxies]]
+      name = "ssh-%s"
+      type = "tcp"
+      localIP = "127.0.0.1"
+      localPort = 22
+      remotePort = %d
+  - path: /etc/systemd/system/frpc.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=frp client
+      After=network.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/frpc -c /etc/frp/frpc.toml
+      Restart=always
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - [bash, -lc, "set -euo pipefail; arch=$(uname -m); case $arch in x86_64) frp_arch=amd64 ;; aarch64|arm64) frp_arch=arm64 ;; *) exit 0 ;; esac; ver=0.58.1; curl -fsSL -o /tmp/frp.tgz https://github.com/fatedier/frp/releases/download/v${ver}/frp_${ver}_linux_${frp_arch}.tar.gz; tar -xzf /tmp/frp.tgz -C /tmp; install -m 0755 /tmp/frp_${ver}_linux_${frp_arch}/frpc /usr/local/bin/frpc; systemctl daemon-reload; systemctl enable --now frpc"]
+`,
+		req.LoginUsername,
+		req.LoginUsername,
+		req.LoginPassword,
+		req.FRPSServerAddr,
+		req.FRPSServerPort,
+		req.FRPSToken,
+		req.InstanceName,
+		req.SSHRemotePort,
+	)
 }
 
 func (m *Manager) DeleteInstance(ctx context.Context, host model.Host, instanceName string) error {
@@ -352,12 +418,17 @@ func (m *Manager) GetInstanceMetrics(ctx context.Context, host model.Host, insta
 }
 
 func (m *Manager) ResetRootPassword(ctx context.Context, host model.Host, instanceName string, password string) error {
+	return m.SetUserPassword(ctx, host, instanceName, "root", password)
+}
+
+func (m *Manager) SetUserPassword(ctx context.Context, host model.Host, instanceName, username, password string) error {
 	client, err := m.getOrCreateClient(host)
 	if err != nil {
 		return err
 	}
 
-	command := fmt.Sprintf("echo 'root:%s' | chpasswd", password)
+	pair := strings.ReplaceAll(username+":"+password, "'", `'\''`)
+	command := fmt.Sprintf("printf '%%s\n' '%s' | chpasswd", pair)
 	payload := map[string]any{
 		"command":            []string{"/bin/sh", "-c", command},
 		"interactive":        false,

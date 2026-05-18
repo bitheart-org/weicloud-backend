@@ -77,6 +77,7 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 		userGroup.POST("/vms/:id/stop", deps.UserVMHandler.Stop)
 		userGroup.POST("/vms/:id/reboot", deps.UserVMHandler.Reboot)
 		userGroup.POST("/vms/:id/password", deps.UserVMHandler.ResetPassword)
+		userGroup.PUT("/vms/:id/login-password", deps.UserVMHandler.UpdateLoginPassword)
 		userGroup.POST("/vms/:id/vnc-token", deps.UserVNCHandler.IssueToken)
 		userGroup.GET("/vms/:id/resource", deps.UserVMHandler.Resource)
 	}

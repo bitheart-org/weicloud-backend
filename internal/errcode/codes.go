@@ -78,20 +78,22 @@ const (
 )
 
 const (
-	UserVMListUnauthorized          = 40130
-	UserVMListFailed                = 50050
-	UserVMDetailUnauthorized        = 40131
-	UserVMNotFoundForDetail         = 40450
-	UserVMDetailFailed              = 50051
-	UserVMActionUnauthorized        = 40132
-	UserVMNotFoundForAction         = 40451
-	UserVMActionFailed              = 40060
-	UserVMResourceUnauthorized      = 40133
-	UserVMNotFoundForResource       = 40452
-	UserVMResourceFailed            = 50250
-	UserVMResetPasswordUnauthorized = 40134
-	UserVMNotFoundForResetPassword  = 40453
-	UserVMResetPasswordFailed       = 50251
+	UserVMListUnauthorized           = 40130
+	UserVMListFailed                 = 50050
+	UserVMDetailUnauthorized         = 40131
+	UserVMNotFoundForDetail          = 40450
+	UserVMDetailFailed               = 50051
+	UserVMActionUnauthorized         = 40132
+	UserVMNotFoundForAction          = 40451
+	UserVMActionFailed               = 40060
+	UserVMResourceUnauthorized       = 40133
+	UserVMNotFoundForResource        = 40452
+	UserVMResourceFailed             = 50250
+	UserVMResetPasswordUnauthorized  = 40134
+	UserVMNotFoundForResetPassword   = 40453
+	UserVMResetPasswordFailed        = 50251
+	UserVMUpdatePasswordInvalidInput = 40062
+	UserVMUpdatePasswordFailed       = 50252
 )
 
 const (

@@ -38,7 +38,13 @@ func main() {
 	userService := service.NewUserService(db)
 	incusManager := incus.NewManager()
 	hostService := service.NewHostService(db, incusManager)
-	vmService := service.NewVMService(db, hostService, incusManager)
+	vmService := service.NewVMService(db, hostService, incusManager, service.VMProvisionConfig{
+		DefaultUsername: cfg.VMDefaultUsername,
+		FRPSServerAddr:  cfg.FRPSServerAddr,
+		FRPSServerPort:  cfg.FRPSServerPort,
+		FRPSToken:       cfg.FRPSToken,
+		RemotePortStart: cfg.FRPRemotePortStart,
+	})
 	systemService := service.NewSystemService(db)
 	vncService := service.NewVNCService()
 
