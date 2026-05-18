@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -325,6 +327,29 @@ func (s *VMService) GetResourceForOwner(ctx context.Context, vmID string, ownerI
 	return s.getResource(ctx, vm)
 }
 
+func (s *VMService) ResetRootPasswordForOwner(ctx context.Context, vmID string, ownerID string) (string, error) {
+	vm, err := s.GetByIDForOwner(vmID, ownerID)
+	if err != nil {
+		return "", err
+	}
+	host, err := s.hostService.GetByID(vm.HostID.String())
+	if err != nil {
+		return "", err
+	}
+
+	password, err := generatePassword(16)
+	if err != nil {
+		return "", fmt.Errorf("generate password: %w", err)
+	}
+	if err := s.incus.ResetRootPassword(ctx, host, vm.IncusInstance, password); err != nil {
+		return "", err
+	}
+	if err := s.logOperation(ownerID, &vm.ID, "password_reset", "reset root password for vm "+vm.Name); err != nil {
+		return "", err
+	}
+	return password, nil
+}
+
 func (s *VMService) getResource(ctx context.Context, vm model.Instance) (dto.VMResourcePayload, error) {
 	host, err := s.hostService.GetByID(vm.HostID.String())
 	if err != nil {
@@ -380,4 +405,17 @@ func (s *VMService) logOperation(actorUserID string, instanceID *uuid.UUID, acti
 		return fmt.Errorf("write operation log: %w", err)
 	}
 	return nil
+}
+
+func generatePassword(length int) (string, error) {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
+	password := make([]byte, length)
+	for i := range password {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		password[i] = charset[n.Int64()]
+	}
+	return string(password), nil
 }

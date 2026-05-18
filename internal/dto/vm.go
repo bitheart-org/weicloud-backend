@@ -53,3 +53,7 @@ type AssignVMRequest struct {
 type MigrateVMRequest struct {
 	TargetHostID string `json:"target_host_id" binding:"required"`
 }
+
+type ResetRootPasswordResponse struct {
+	NewPassword string `json:"new_password"`
+}

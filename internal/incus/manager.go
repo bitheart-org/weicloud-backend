@@ -342,6 +342,36 @@ func (m *Manager) GetInstanceMetrics(ctx context.Context, host model.Host, insta
 	}, nil
 }
 
+func (m *Manager) ResetRootPassword(ctx context.Context, host model.Host, instanceName string, password string) error {
+	client, err := m.getOrCreateClient(host)
+	if err != nil {
+		return err
+	}
+
+	command := fmt.Sprintf("echo 'root:%s' | chpasswd", password)
+	payload := map[string]any{
+		"command":            []string{"/bin/sh", "-c", command},
+		"interactive":        false,
+		"wait-for-websocket": false,
+	}
+	raw, err := m.doJSONRaw(ctx, client, http.MethodPost, "/1.0/instances/"+url.PathEscape(instanceName)+"/exec", payload)
+	if err != nil {
+		return err
+	}
+
+	var operationResp struct {
+		Operation string `json:"operation"`
+	}
+	if err := json.Unmarshal(raw, &operationResp); err != nil {
+		return fmt.Errorf("decode exec operation response: %w", err)
+	}
+	if operationResp.Operation == "" {
+		return fmt.Errorf("missing exec operation id")
+	}
+
+	return m.waitOperation(ctx, client, operationResp.Operation, 30)
+}
+
 func (m *Manager) getOrCreateClient(host model.Host) (*hostClient, error) {
 	hostID := host.ID.String()
 	m.mu.RLock()
@@ -427,18 +457,23 @@ func (m *Manager) getInstance(ctx context.Context, client *hostClient, instanceN
 }
 
 func (m *Manager) doJSON(ctx context.Context, client *hostClient, method, path string, body any) error {
+	_, err := m.doJSONRaw(ctx, client, method, path, body)
+	return err
+}
+
+func (m *Manager) doJSONRaw(ctx context.Context, client *hostClient, method, path string, body any) ([]byte, error) {
 	var reader io.Reader
 	if body != nil {
 		payload, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("marshal request body: %w", err)
+			return nil, fmt.Errorf("marshal request body: %w", err)
 		}
 		reader = bytes.NewReader(payload)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, client.baseURL+path, reader)
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -446,13 +481,48 @@ func (m *Manager) doJSON(ctx context.Context, client *hostClient, method, path s
 
 	resp, err := client.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request incus: %w", err)
+		return nil, fmt.Errorf("request incus: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("incus request failed status=%d body=%s", resp.StatusCode, string(respBody))
+	}
+	return respBody, nil
+}
+
+func (m *Manager) waitOperation(ctx context.Context, client *hostClient, operationPath string, timeoutSec int) error {
+	waitPath := operationPath + "/wait?timeout=" + fmt.Sprintf("%d", timeoutSec)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, client.baseURL+waitPath, nil)
+	if err != nil {
+		return fmt.Errorf("build wait operation request: %w", err)
+	}
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("wait operation request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("incus request failed status=%d body=%s", resp.StatusCode, string(respBody))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("wait operation failed status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var operationResp struct {
+		Metadata struct {
+			Status string `json:"status"`
+			Err    string `json:"err"`
+		} `json:"metadata"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&operationResp); err != nil {
+		return fmt.Errorf("decode wait operation response: %w", err)
+	}
+	if strings.ToLower(operationResp.Metadata.Status) != "success" {
+		if operationResp.Metadata.Err != "" {
+			return fmt.Errorf("operation failed: %s", operationResp.Metadata.Err)
+		}
+		return fmt.Errorf("operation failed status: %s", operationResp.Metadata.Status)
 	}
 	return nil
 }

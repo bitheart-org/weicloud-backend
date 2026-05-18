@@ -94,3 +94,21 @@ func (h *UserVMHandler) Resource(c *gin.Context) {
 	}
 	ok(c, payload)
 }
+
+func (h *UserVMHandler) ResetPassword(c *gin.Context) {
+	claims, exists := middleware.CurrentUserClaims(c)
+	if !exists {
+		fail(c, http.StatusUnauthorized, 40134, "unauthorized")
+		return
+	}
+	password, err := h.vmService.ResetRootPasswordForOwner(c.Request.Context(), c.Param("id"), claims.UserID)
+	if err != nil {
+		if service.IsNotFound(err) {
+			fail(c, http.StatusNotFound, 40453, "vm not found")
+			return
+		}
+		fail(c, http.StatusBadGateway, 50251, "reset vm password failed")
+		return
+	}
+	ok(c, dto.ResetRootPasswordResponse{NewPassword: password})
+}
