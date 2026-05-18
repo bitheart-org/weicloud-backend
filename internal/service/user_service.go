@@ -51,6 +51,29 @@ func (s *UserService) List(page, pageSize int, query string) ([]model.User, int6
 	return users, total, nil
 }
 
+func (s *UserService) ListUserOptions() ([]dto.UserOptionPayload, error) {
+	var users []model.User
+	if err := s.db.
+		Where("role = ?", model.UserRoleUser).
+		Order("created_at DESC").
+		Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("list user options: %w", err)
+	}
+
+	items := make([]dto.UserOptionPayload, 0, len(users))
+	for _, user := range users {
+		name := strings.TrimSpace(user.DisplayName)
+		if name == "" {
+			name = user.Username
+		}
+		items = append(items, dto.UserOptionPayload{
+			ID:   user.ID.String(),
+			Name: name,
+		})
+	}
+	return items, nil
+}
+
 func (s *UserService) Create(req dto.CreateUserRequest) (model.User, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {

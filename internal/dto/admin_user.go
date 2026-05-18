@@ -7,6 +7,15 @@ type ListUsersResponse struct {
 	PageSize int           `json:"page_size"`
 }
 
+type UserOptionPayload struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ListUserOptionsResponse struct {
+	Items []UserOptionPayload `json:"items"`
+}
+
 type CreateUserRequest struct {
 	Username    string `json:"username" binding:"required,min=3,max=64"`
 	Password    string `json:"password" binding:"required,min=6,max=128"`

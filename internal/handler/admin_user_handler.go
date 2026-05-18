@@ -48,6 +48,15 @@ func (h *AdminUserHandler) List(c *gin.Context) {
 	})
 }
 
+func (h *AdminUserHandler) ListOptions(c *gin.Context) {
+	items, err := h.userService.ListUserOptions()
+	if err != nil {
+		fail(c, http.StatusInternalServerError, errcode.AdminUserQueryFailed, "query users failed")
+		return
+	}
+	ok(c, dto.ListUserOptionsResponse{Items: items})
+}
+
 func (h *AdminUserHandler) Create(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

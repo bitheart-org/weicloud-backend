@@ -39,6 +39,7 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 	adminGroup.Use(deps.AuthMiddleware, middleware.RequireRoles(model.UserRoleAdmin))
 	{
 		adminGroup.GET("/users", deps.AdminUserHandler.List)
+		adminGroup.GET("/users/options", deps.AdminUserHandler.ListOptions)
 		adminGroup.POST("/users", deps.AdminUserHandler.Create)
 		adminGroup.PUT("/users/:id", deps.AdminUserHandler.Update)
 		adminGroup.DELETE("/users/:id", deps.AdminUserHandler.Disable)
