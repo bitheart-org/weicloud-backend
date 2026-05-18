@@ -9,6 +9,7 @@ import (
 	"weicloud-backend/internal/config"
 	"weicloud-backend/internal/database"
 	"weicloud-backend/internal/handler"
+	"weicloud-backend/internal/incus"
 	"weicloud-backend/internal/middleware"
 	"weicloud-backend/internal/service"
 )
@@ -34,14 +35,22 @@ func main() {
 
 	authService := service.NewAuthService(db, cfg.JWTSecret, cfg.JWTExpireHours)
 	userService := service.NewUserService(db)
+	incusManager := incus.NewManager()
+	hostService := service.NewHostService(db, incusManager)
+
+	if err := hostService.LoadRegisteredHosts(); err != nil {
+		log.Printf("load registered hosts failed: %v", err)
+	}
 
 	authHandler := handler.NewAuthHandler(authService, userService)
 	adminUserHandler := handler.NewAdminUserHandler(userService)
+	adminHostHandler := handler.NewAdminHostHandler(hostService)
 
 	router := gin.Default()
 	handler.RegisterRoutes(router, handler.RouterDeps{
 		AuthHandler:      authHandler,
 		AdminUserHandler: adminUserHandler,
+		AdminHostHandler: adminHostHandler,
 		AuthMiddleware:   middleware.JWTAuth(authService),
 	})
 

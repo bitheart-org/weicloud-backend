@@ -12,6 +12,7 @@ import (
 type RouterDeps struct {
 	AuthHandler      *AuthHandler
 	AdminUserHandler *AdminUserHandler
+	AdminHostHandler *AdminHostHandler
 	AuthMiddleware   gin.HandlerFunc
 }
 
@@ -36,5 +37,11 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 		adminGroup.PUT("/users/:id", deps.AdminUserHandler.Update)
 		adminGroup.DELETE("/users/:id", deps.AdminUserHandler.Disable)
 		adminGroup.PUT("/users/:id/password", deps.AdminUserHandler.ResetPassword)
+
+		adminGroup.GET("/hosts", deps.AdminHostHandler.List)
+		adminGroup.POST("/hosts", deps.AdminHostHandler.Create)
+		adminGroup.PUT("/hosts/:id", deps.AdminHostHandler.Update)
+		adminGroup.DELETE("/hosts/:id", deps.AdminHostHandler.Delete)
+		adminGroup.POST("/hosts/:id/sync", deps.AdminHostHandler.Sync)
 	}
 }
