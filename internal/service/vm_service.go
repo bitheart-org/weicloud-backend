@@ -94,7 +94,7 @@ func (s *VMService) Create(ctx context.Context, req dto.CreateVMRequest, actorUs
 	}
 
 	instance := model.Instance{
-		IncusInstance:  "vm-" + uuid.NewString(),
+		IncusInstance:  "vm-" + uuid.NewString()[:8],
 		HostID:         host.ID,
 		Name:           req.Name,
 		Image:          req.Image,
@@ -443,6 +443,25 @@ func (s *VMService) IssueVNCOneTimeToken(vncService *VNCService, vmID, ownerID s
 		return "", err
 	}
 	return vncService.IssueToken(ownerID, vmID, time.Minute), nil
+}
+
+func (s *VMService) OpenShellForOwner(ctx context.Context, vmID, ownerID string) (*websocket.Conn, error) {
+	vm, err := s.GetByIDForOwner(vmID, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	host, err := s.hostService.GetByID(vm.HostID.String())
+	if err != nil {
+		return nil, err
+	}
+	return s.incus.OpenShellConnection(ctx, host, vm.IncusInstance)
+}
+
+func (s *VMService) IssueShellOneTimeToken(shellService *ShellService, vmID, ownerID string) (string, error) {
+	if _, err := s.GetByIDForOwner(vmID, ownerID); err != nil {
+		return "", err
+	}
+	return shellService.IssueToken(ownerID, vmID, time.Minute), nil
 }
 
 func (s *VMService) getResource(ctx context.Context, vm model.Instance) (dto.VMResourcePayload, error) {

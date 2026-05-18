@@ -47,6 +47,7 @@ func main() {
 	})
 	systemService := service.NewSystemService(db)
 	vncService := service.NewVNCService()
+	shellService := service.NewShellService()
 
 	if err := hostService.LoadRegisteredHosts(); err != nil {
 		log.Printf("load registered hosts failed: %v", err)
@@ -59,7 +60,9 @@ func main() {
 	adminSystemHandler := handler.NewAdminSystemHandler(systemService, vmService)
 	userVMHandler := handler.NewUserVMHandler(vmService)
 	userVNCHandler := handler.NewUserVNCHandler(vmService, vncService)
+	userShellHandler := handler.NewUserShellHandler(vmService, shellService)
 	vncWSHandler := handler.NewVNCWSHandler(vmService, vncService)
+	shellWSHandler := handler.NewShellWSHandler(vmService, shellService)
 
 	router := gin.Default()
 	router.Use(middleware.SecurityHeaders(), middleware.RateLimit(300, time.Minute))
@@ -71,7 +74,9 @@ func main() {
 		AdminSystemHandler: adminSystemHandler,
 		UserVMHandler:      userVMHandler,
 		UserVNCHandler:     userVNCHandler,
+		UserShellHandler:   userShellHandler,
 		VNCWSHandler:       vncWSHandler,
+		ShellWSHandler:     shellWSHandler,
 		AuthMiddleware:     middleware.JWTAuth(authService),
 	})
 

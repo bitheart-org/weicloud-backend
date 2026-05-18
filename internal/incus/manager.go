@@ -453,6 +453,14 @@ func (m *Manager) SetUserPassword(ctx context.Context, host model.Host, instance
 }
 
 func (m *Manager) OpenVNCConnection(ctx context.Context, host model.Host, instanceName string) (*websocket.Conn, error) {
+	return m.openConsoleConnection(ctx, host, instanceName, "vga")
+}
+
+func (m *Manager) OpenShellConnection(ctx context.Context, host model.Host, instanceName string) (*websocket.Conn, error) {
+	return m.openConsoleConnection(ctx, host, instanceName, "console")
+}
+
+func (m *Manager) openConsoleConnection(ctx context.Context, host model.Host, instanceName, consoleType string) (*websocket.Conn, error) {
 	client, err := m.getOrCreateClient(host)
 	if err != nil {
 		return nil, err
@@ -464,7 +472,7 @@ func (m *Manager) OpenVNCConnection(ctx context.Context, host model.Host, instan
 		http.MethodPost,
 		"/1.0/instances/"+url.PathEscape(instanceName)+"/console",
 		map[string]any{
-			"type": "vga",
+			"type": consoleType,
 		},
 	)
 	if err != nil {
@@ -496,7 +504,7 @@ func (m *Manager) OpenVNCConnection(ctx context.Context, host model.Host, instan
 	}
 	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("dial vnc websocket: %w", err)
+		return nil, fmt.Errorf("dial %s websocket: %w", consoleType, err)
 	}
 	return conn, nil
 }

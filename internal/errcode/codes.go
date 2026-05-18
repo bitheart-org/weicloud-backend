@@ -104,12 +104,18 @@ const (
 )
 
 const (
-	VNCIssueTokenUnauthorized = 40135
-	VNCIssueTokenNotFound     = 40454
-	VNCIssueTokenFailed       = 40061
-	VNCMissingToken           = 40136
-	VNCInvalidToken           = 40137
-	VNCConnectBackendFailed   = 50270
+	VNCIssueTokenUnauthorized   = 40135
+	VNCIssueTokenNotFound       = 40454
+	VNCIssueTokenFailed         = 40061
+	VNCMissingToken             = 40136
+	VNCInvalidToken             = 40137
+	VNCConnectBackendFailed     = 50270
+	ShellIssueTokenUnauthorized = 40138
+	ShellIssueTokenNotFound     = 40455
+	ShellIssueTokenFailed       = 40063
+	ShellMissingToken           = 40139
+	ShellInvalidToken           = 40140
+	ShellConnectBackendFailed   = 50271
 )
 
 const (
