@@ -10,12 +10,13 @@ import (
 )
 
 type RouterDeps struct {
-	AuthHandler      *AuthHandler
-	AdminUserHandler *AdminUserHandler
-	AdminHostHandler *AdminHostHandler
-	AdminVMHandler   *AdminVMHandler
-	UserVMHandler    *UserVMHandler
-	AuthMiddleware   gin.HandlerFunc
+	AuthHandler        *AuthHandler
+	AdminUserHandler   *AdminUserHandler
+	AdminHostHandler   *AdminHostHandler
+	AdminVMHandler     *AdminVMHandler
+	AdminSystemHandler *AdminSystemHandler
+	UserVMHandler      *UserVMHandler
+	AuthMiddleware     gin.HandlerFunc
 }
 
 func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
@@ -58,6 +59,9 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 		adminGroup.POST("/vms/:id/stop", deps.AdminVMHandler.Stop)
 		adminGroup.POST("/vms/:id/reboot", deps.AdminVMHandler.Reboot)
 		adminGroup.GET("/images", deps.AdminVMHandler.ListImages)
+		adminGroup.GET("/dashboard", deps.AdminSystemHandler.Dashboard)
+		adminGroup.GET("/logs", deps.AdminSystemHandler.Logs)
+		adminGroup.GET("/vms/:id/resource", deps.AdminSystemHandler.VMResource)
 	}
 
 	userGroup := api.Group("/user")
@@ -68,5 +72,6 @@ func RegisterRoutes(r *gin.Engine, deps RouterDeps) {
 		userGroup.POST("/vms/:id/start", deps.UserVMHandler.Start)
 		userGroup.POST("/vms/:id/stop", deps.UserVMHandler.Stop)
 		userGroup.POST("/vms/:id/reboot", deps.UserVMHandler.Reboot)
+		userGroup.GET("/vms/:id/resource", deps.UserVMHandler.Resource)
 	}
 }

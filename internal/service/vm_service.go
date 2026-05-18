@@ -309,6 +309,37 @@ func (s *VMService) ListImages(ctx context.Context) ([]incus.ImageInfo, error) {
 	return s.incus.ListImages(ctx)
 }
 
+func (s *VMService) GetResourceByID(ctx context.Context, vmID string) (dto.VMResourcePayload, error) {
+	vm, err := s.GetByID(vmID)
+	if err != nil {
+		return dto.VMResourcePayload{}, err
+	}
+	return s.getResource(ctx, vm)
+}
+
+func (s *VMService) GetResourceForOwner(ctx context.Context, vmID string, ownerID string) (dto.VMResourcePayload, error) {
+	vm, err := s.GetByIDForOwner(vmID, ownerID)
+	if err != nil {
+		return dto.VMResourcePayload{}, err
+	}
+	return s.getResource(ctx, vm)
+}
+
+func (s *VMService) getResource(ctx context.Context, vm model.Instance) (dto.VMResourcePayload, error) {
+	host, err := s.hostService.GetByID(vm.HostID.String())
+	if err != nil {
+		return dto.VMResourcePayload{}, err
+	}
+	metrics, err := s.incus.GetInstanceMetrics(ctx, host, vm.IncusInstance)
+	if err != nil {
+		return dto.VMResourcePayload{}, err
+	}
+	return dto.VMResourcePayload{
+		CPUNanoseconds: metrics.CPUNanoseconds,
+		MemoryBytes:    metrics.MemoryBytes,
+	}, nil
+}
+
 func ToInstancePayload(vm model.Instance) dto.InstancePayload {
 	var ownerID *string
 	if vm.OwnerID != nil {

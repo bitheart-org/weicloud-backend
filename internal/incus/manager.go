@@ -40,6 +40,11 @@ type ImageInfo struct {
 	Type         string `json:"type"`
 }
 
+type InstanceMetrics struct {
+	CPUNanoseconds int64
+	MemoryBytes    int64
+}
+
 type hostClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -296,6 +301,45 @@ func (m *Manager) ListImages(ctx context.Context) ([]ImageInfo, error) {
 		})
 	}
 	return items, nil
+}
+
+func (m *Manager) GetInstanceMetrics(ctx context.Context, host model.Host, instanceName string) (InstanceMetrics, error) {
+	client, err := m.getOrCreateClient(host)
+	if err != nil {
+		return InstanceMetrics{}, err
+	}
+	path := "/1.0/instances/" + url.PathEscape(instanceName) + "/state"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, client.baseURL+path, nil)
+	if err != nil {
+		return InstanceMetrics{}, fmt.Errorf("build metrics request: %w", err)
+	}
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		return InstanceMetrics{}, fmt.Errorf("request instance metrics: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return InstanceMetrics{}, fmt.Errorf("instance metrics status: %d", resp.StatusCode)
+	}
+
+	var envelope struct {
+		Metadata struct {
+			CPU struct {
+				Usage int64 `json:"usage"`
+			} `json:"cpu"`
+			Memory struct {
+				Usage int64 `json:"usage"`
+			} `json:"memory"`
+		} `json:"metadata"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return InstanceMetrics{}, fmt.Errorf("decode instance metrics: %w", err)
+	}
+
+	return InstanceMetrics{
+		CPUNanoseconds: envelope.Metadata.CPU.Usage,
+		MemoryBytes:    envelope.Metadata.Memory.Usage,
+	}, nil
 }
 
 func (m *Manager) getOrCreateClient(host model.Host) (*hostClient, error) {

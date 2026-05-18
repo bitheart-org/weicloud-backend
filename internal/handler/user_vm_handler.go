@@ -76,3 +76,21 @@ func (h *UserVMHandler) Action(c *gin.Context, action string) {
 func (h *UserVMHandler) Start(c *gin.Context)  { h.Action(c, "start") }
 func (h *UserVMHandler) Stop(c *gin.Context)   { h.Action(c, "stop") }
 func (h *UserVMHandler) Reboot(c *gin.Context) { h.Action(c, "reboot") }
+
+func (h *UserVMHandler) Resource(c *gin.Context) {
+	claims, exists := middleware.CurrentUserClaims(c)
+	if !exists {
+		fail(c, http.StatusUnauthorized, 40133, "unauthorized")
+		return
+	}
+	payload, err := h.vmService.GetResourceForOwner(c.Request.Context(), c.Param("id"), claims.UserID)
+	if err != nil {
+		if service.IsNotFound(err) {
+			fail(c, http.StatusNotFound, 40452, "vm not found")
+			return
+		}
+		fail(c, http.StatusBadGateway, 50250, "query vm resource failed")
+		return
+	}
+	ok(c, payload)
+}

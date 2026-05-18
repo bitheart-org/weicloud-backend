@@ -38,6 +38,7 @@ func main() {
 	incusManager := incus.NewManager()
 	hostService := service.NewHostService(db, incusManager)
 	vmService := service.NewVMService(db, hostService, incusManager)
+	systemService := service.NewSystemService(db)
 
 	if err := hostService.LoadRegisteredHosts(); err != nil {
 		log.Printf("load registered hosts failed: %v", err)
@@ -47,16 +48,18 @@ func main() {
 	adminUserHandler := handler.NewAdminUserHandler(userService)
 	adminHostHandler := handler.NewAdminHostHandler(hostService)
 	adminVMHandler := handler.NewAdminVMHandler(vmService)
+	adminSystemHandler := handler.NewAdminSystemHandler(systemService, vmService)
 	userVMHandler := handler.NewUserVMHandler(vmService)
 
 	router := gin.Default()
 	handler.RegisterRoutes(router, handler.RouterDeps{
-		AuthHandler:      authHandler,
-		AdminUserHandler: adminUserHandler,
-		AdminHostHandler: adminHostHandler,
-		AdminVMHandler:   adminVMHandler,
-		UserVMHandler:    userVMHandler,
-		AuthMiddleware:   middleware.JWTAuth(authService),
+		AuthHandler:        authHandler,
+		AdminUserHandler:   adminUserHandler,
+		AdminHostHandler:   adminHostHandler,
+		AdminVMHandler:     adminVMHandler,
+		AdminSystemHandler: adminSystemHandler,
+		UserVMHandler:      userVMHandler,
+		AuthMiddleware:     middleware.JWTAuth(authService),
 	})
 
 	if err := router.Run(cfg.ServerAddr); err != nil {
