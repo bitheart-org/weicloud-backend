@@ -21,7 +21,7 @@ func Connect(cfg config.Config) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&model.User{}, &model.Host{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Host{}, &model.Instance{}, &model.OperationLog{}); err != nil {
 		return fmt.Errorf("auto migrate models: %w", err)
 	}
 	return nil
