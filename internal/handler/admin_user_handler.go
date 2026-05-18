@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"weicloud-backend/internal/dto"
+	"weicloud-backend/internal/errcode"
 	"weicloud-backend/internal/service"
 )
 
@@ -30,7 +31,7 @@ func (h *AdminUserHandler) List(c *gin.Context) {
 	query := c.Query("query")
 	users, total, err := h.userService.List(page, pageSize, query)
 	if err != nil {
-		fail(c, http.StatusInternalServerError, 50020, "query users failed")
+		fail(c, http.StatusInternalServerError, errcode.AdminUserQueryFailed, "query users failed")
 		return
 	}
 
@@ -50,13 +51,13 @@ func (h *AdminUserHandler) List(c *gin.Context) {
 func (h *AdminUserHandler) Create(c *gin.Context) {
 	var req dto.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fail(c, http.StatusBadRequest, 40020, "invalid request")
+		fail(c, http.StatusBadRequest, errcode.AdminUserCreateInvalidInput, "invalid request")
 		return
 	}
 
 	user, err := h.userService.Create(req)
 	if err != nil {
-		fail(c, http.StatusBadRequest, 40021, "create user failed")
+		fail(c, http.StatusBadRequest, errcode.AdminUserCreateFailed, "create user failed")
 		return
 	}
 
@@ -66,7 +67,7 @@ func (h *AdminUserHandler) Create(c *gin.Context) {
 func (h *AdminUserHandler) Update(c *gin.Context) {
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fail(c, http.StatusBadRequest, 40022, "invalid request")
+		fail(c, http.StatusBadRequest, errcode.AdminUserUpdateInvalidInput, "invalid request")
 		return
 	}
 
@@ -74,10 +75,10 @@ func (h *AdminUserHandler) Update(c *gin.Context) {
 	user, err := h.userService.Update(userID, req)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40420, "user not found")
+			fail(c, http.StatusNotFound, errcode.AdminUserNotFoundForUpdate, "user not found")
 			return
 		}
-		fail(c, http.StatusBadRequest, 40023, "update user failed")
+		fail(c, http.StatusBadRequest, errcode.AdminUserUpdateFailed, "update user failed")
 		return
 	}
 
@@ -88,10 +89,10 @@ func (h *AdminUserHandler) Disable(c *gin.Context) {
 	userID := c.Param("id")
 	if err := h.userService.Disable(userID); err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40421, "user not found")
+			fail(c, http.StatusNotFound, errcode.AdminUserNotFoundForDisable, "user not found")
 			return
 		}
-		fail(c, http.StatusInternalServerError, 50021, "disable user failed")
+		fail(c, http.StatusInternalServerError, errcode.AdminUserDisableFailed, "disable user failed")
 		return
 	}
 
@@ -101,17 +102,17 @@ func (h *AdminUserHandler) Disable(c *gin.Context) {
 func (h *AdminUserHandler) ResetPassword(c *gin.Context) {
 	var req dto.ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fail(c, http.StatusBadRequest, 40024, "invalid request")
+		fail(c, http.StatusBadRequest, errcode.AdminUserResetInvalidInput, "invalid request")
 		return
 	}
 
 	userID := c.Param("id")
 	if err := h.userService.ResetPassword(userID, req.Password); err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40422, "user not found")
+			fail(c, http.StatusNotFound, errcode.AdminUserNotFoundForReset, "user not found")
 			return
 		}
-		fail(c, http.StatusInternalServerError, 50022, "reset password failed")
+		fail(c, http.StatusInternalServerError, errcode.AdminUserResetPasswordFailed, "reset password failed")
 		return
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"weicloud-backend/internal/errcode"
 	"weicloud-backend/internal/service"
 )
 
@@ -16,7 +17,7 @@ func JWTAuth(authService *service.AuthService) gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    40101,
+				"code":    errcode.AuthMissingAuthorizationHeader,
 				"message": "missing authorization header",
 				"data":    nil,
 			})
@@ -26,7 +27,7 @@ func JWTAuth(authService *service.AuthService) gin.HandlerFunc {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    40102,
+				"code":    errcode.AuthInvalidAuthorizationHeader,
 				"message": "invalid authorization header",
 				"data":    nil,
 			})
@@ -36,7 +37,7 @@ func JWTAuth(authService *service.AuthService) gin.HandlerFunc {
 		claims, err := authService.ParseToken(parts[1])
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    40103,
+				"code":    errcode.AuthInvalidToken,
 				"message": "invalid token",
 				"data":    nil,
 			})

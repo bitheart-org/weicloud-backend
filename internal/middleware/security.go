@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"weicloud-backend/internal/errcode"
 )
 
 func SecurityHeaders() gin.HandlerFunc {
@@ -68,7 +70,7 @@ func RateLimit(limit int, window time.Duration) gin.HandlerFunc {
 		key := c.ClientIP()
 		if !limiter.allow(key, time.Now()) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"code":    42901,
+				"code":    errcode.RateLimitExceeded,
 				"message": "rate limit exceeded",
 				"data":    nil,
 			})

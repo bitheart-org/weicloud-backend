@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"weicloud-backend/internal/dto"
+	"weicloud-backend/internal/errcode"
 	"weicloud-backend/internal/middleware"
 	"weicloud-backend/internal/service"
 )
@@ -29,16 +30,16 @@ func NewUserVNCHandler(vmService *service.VMService, vncService *service.VNCServ
 func (h *UserVNCHandler) IssueToken(c *gin.Context) {
 	claims, exists := middleware.CurrentUserClaims(c)
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40135, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.VNCIssueTokenUnauthorized, "unauthorized")
 		return
 	}
 	token, err := h.vmService.IssueVNCOneTimeToken(h.vncService, c.Param("id"), claims.UserID)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40454, "vm not found")
+			fail(c, http.StatusNotFound, errcode.VNCIssueTokenNotFound, "vm not found")
 			return
 		}
-		fail(c, http.StatusBadRequest, 40061, "issue vnc token failed")
+		fail(c, http.StatusBadRequest, errcode.VNCIssueTokenFailed, "issue vnc token failed")
 		return
 	}
 	ok(c, dto.VncTokenResponse{Token: token})
@@ -64,20 +65,20 @@ func (h *VNCWSHandler) Proxy(c *gin.Context) {
 	vmID := c.Param("id")
 	token := c.Query("token")
 	if token == "" {
-		fail(c, http.StatusUnauthorized, 40136, "missing vnc token")
+		fail(c, http.StatusUnauthorized, errcode.VNCMissingToken, "missing vnc token")
 		return
 	}
 
 	userID, err := h.vncService.ConsumeToken(token, vmID)
 	if err != nil {
-		fail(c, http.StatusUnauthorized, 40137, "invalid vnc token")
+		fail(c, http.StatusUnauthorized, errcode.VNCInvalidToken, "invalid vnc token")
 		return
 	}
 	defer h.vncService.ReleaseSession(vmID)
 
 	remoteConn, err := h.vmService.OpenVNCForOwner(c.Request.Context(), vmID, userID)
 	if err != nil {
-		fail(c, http.StatusBadGateway, 50270, "connect vnc backend failed")
+		fail(c, http.StatusBadGateway, errcode.VNCConnectBackendFailed, "connect vnc backend failed")
 		return
 	}
 	defer remoteConn.Close()

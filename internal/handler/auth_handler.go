@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"weicloud-backend/internal/dto"
+	"weicloud-backend/internal/errcode"
 	"weicloud-backend/internal/service"
 )
 
@@ -25,7 +26,7 @@ func NewAuthHandler(authService *service.AuthService, userService *service.UserS
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		fail(c, http.StatusBadRequest, 40001, "invalid request")
+		fail(c, http.StatusBadRequest, errcode.AuthInvalidRequest, "invalid request")
 		return
 	}
 
@@ -33,11 +34,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidCredential):
-			fail(c, http.StatusUnauthorized, 40110, "invalid username or password")
+			fail(c, http.StatusUnauthorized, errcode.AuthInvalidCredential, "invalid username or password")
 		case errors.Is(err, service.ErrUserDisabled):
-			fail(c, http.StatusForbidden, 40310, "user is disabled")
+			fail(c, http.StatusForbidden, errcode.AuthUserDisabled, "user is disabled")
 		default:
-			fail(c, http.StatusInternalServerError, 50010, "login failed")
+			fail(c, http.StatusInternalServerError, errcode.AuthLoginFailed, "login failed")
 		}
 		return
 	}
@@ -51,23 +52,23 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	claims, exists := c.Get("current_user_claims")
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40111, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.AuthUnauthorized, "unauthorized")
 		return
 	}
 
 	userClaims, castOK := claims.(*service.UserClaims)
 	if !castOK {
-		fail(c, http.StatusUnauthorized, 40112, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.AuthUnauthorizedContext, "unauthorized")
 		return
 	}
 
 	user, err := h.userService.GetByID(userClaims.UserID)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusUnauthorized, 40113, "user not found")
+			fail(c, http.StatusUnauthorized, errcode.AuthUserNotFound, "user not found")
 			return
 		}
-		fail(c, http.StatusInternalServerError, 50011, "query user failed")
+		fail(c, http.StatusInternalServerError, errcode.AuthQueryUserFailed, "query user failed")
 		return
 	}
 

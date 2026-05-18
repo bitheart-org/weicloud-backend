@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"weicloud-backend/internal/dto"
+	"weicloud-backend/internal/errcode"
 	"weicloud-backend/internal/middleware"
 	"weicloud-backend/internal/service"
 )
@@ -21,13 +22,13 @@ func NewUserVMHandler(vmService *service.VMService) *UserVMHandler {
 func (h *UserVMHandler) List(c *gin.Context) {
 	claims, exists := middleware.CurrentUserClaims(c)
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40130, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.UserVMListUnauthorized, "unauthorized")
 		return
 	}
 
 	items, err := h.vmService.ListByOwner(claims.UserID)
 	if err != nil {
-		fail(c, http.StatusInternalServerError, 50050, "query vms failed")
+		fail(c, http.StatusInternalServerError, errcode.UserVMListFailed, "query vms failed")
 		return
 	}
 	result := make([]dto.InstancePayload, 0, len(items))
@@ -40,16 +41,16 @@ func (h *UserVMHandler) List(c *gin.Context) {
 func (h *UserVMHandler) Detail(c *gin.Context) {
 	claims, exists := middleware.CurrentUserClaims(c)
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40131, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.UserVMDetailUnauthorized, "unauthorized")
 		return
 	}
 	vm, err := h.vmService.GetByIDForOwner(c.Param("id"), claims.UserID)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40450, "vm not found")
+			fail(c, http.StatusNotFound, errcode.UserVMNotFoundForDetail, "vm not found")
 			return
 		}
-		fail(c, http.StatusInternalServerError, 50051, "query vm failed")
+		fail(c, http.StatusInternalServerError, errcode.UserVMDetailFailed, "query vm failed")
 		return
 	}
 	ok(c, service.ToInstancePayload(vm))
@@ -58,16 +59,16 @@ func (h *UserVMHandler) Detail(c *gin.Context) {
 func (h *UserVMHandler) Action(c *gin.Context, action string) {
 	claims, exists := middleware.CurrentUserClaims(c)
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40132, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.UserVMActionUnauthorized, "unauthorized")
 		return
 	}
 	vm, err := h.vmService.UserAction(c.Request.Context(), c.Param("id"), claims.UserID, action)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40451, "vm not found")
+			fail(c, http.StatusNotFound, errcode.UserVMNotFoundForAction, "vm not found")
 			return
 		}
-		fail(c, http.StatusBadRequest, 40060, action+" vm failed")
+		fail(c, http.StatusBadRequest, errcode.UserVMActionFailed, action+" vm failed")
 		return
 	}
 	ok(c, service.ToInstancePayload(vm))
@@ -80,16 +81,16 @@ func (h *UserVMHandler) Reboot(c *gin.Context) { h.Action(c, "reboot") }
 func (h *UserVMHandler) Resource(c *gin.Context) {
 	claims, exists := middleware.CurrentUserClaims(c)
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40133, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.UserVMResourceUnauthorized, "unauthorized")
 		return
 	}
 	payload, err := h.vmService.GetResourceForOwner(c.Request.Context(), c.Param("id"), claims.UserID)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40452, "vm not found")
+			fail(c, http.StatusNotFound, errcode.UserVMNotFoundForResource, "vm not found")
 			return
 		}
-		fail(c, http.StatusBadGateway, 50250, "query vm resource failed")
+		fail(c, http.StatusBadGateway, errcode.UserVMResourceFailed, "query vm resource failed")
 		return
 	}
 	ok(c, payload)
@@ -98,16 +99,16 @@ func (h *UserVMHandler) Resource(c *gin.Context) {
 func (h *UserVMHandler) ResetPassword(c *gin.Context) {
 	claims, exists := middleware.CurrentUserClaims(c)
 	if !exists {
-		fail(c, http.StatusUnauthorized, 40134, "unauthorized")
+		fail(c, http.StatusUnauthorized, errcode.UserVMResetPasswordUnauthorized, "unauthorized")
 		return
 	}
 	password, err := h.vmService.ResetRootPasswordForOwner(c.Request.Context(), c.Param("id"), claims.UserID)
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40453, "vm not found")
+			fail(c, http.StatusNotFound, errcode.UserVMNotFoundForResetPassword, "vm not found")
 			return
 		}
-		fail(c, http.StatusBadGateway, 50251, "reset vm password failed")
+		fail(c, http.StatusBadGateway, errcode.UserVMResetPasswordFailed, "reset vm password failed")
 		return
 	}
 	ok(c, dto.ResetRootPasswordResponse{NewPassword: password})

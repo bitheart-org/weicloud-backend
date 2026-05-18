@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"weicloud-backend/internal/errcode"
 )
 
 func RequireRoles(roles ...string) gin.HandlerFunc {
@@ -16,7 +18,7 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 		claims, ok := CurrentUserClaims(c)
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    40104,
+				"code":    errcode.AuthMissingUserContext,
 				"message": "missing user context",
 				"data":    nil,
 			})
@@ -25,7 +27,7 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 
 		if _, exists := allowed[claims.Role]; !exists {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    40301,
+				"code":    errcode.AuthPermissionDenied,
 				"message": "permission denied",
 				"data":    nil,
 			})

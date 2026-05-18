@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"weicloud-backend/internal/errcode"
 	"weicloud-backend/internal/service"
 )
 
@@ -24,7 +25,7 @@ func NewAdminSystemHandler(systemService *service.SystemService, vmService *serv
 func (h *AdminSystemHandler) Dashboard(c *gin.Context) {
 	payload, err := h.systemService.Dashboard()
 	if err != nil {
-		fail(c, http.StatusInternalServerError, 50060, "query dashboard failed")
+		fail(c, http.StatusInternalServerError, errcode.AdminSystemDashboardFailed, "query dashboard failed")
 		return
 	}
 	ok(c, payload)
@@ -39,7 +40,7 @@ func (h *AdminSystemHandler) Logs(c *gin.Context) {
 
 	result, err := h.systemService.ListOperationLogs(page, pageSize)
 	if err != nil {
-		fail(c, http.StatusInternalServerError, 50061, "query logs failed")
+		fail(c, http.StatusInternalServerError, errcode.AdminSystemLogsFailed, "query logs failed")
 		return
 	}
 	ok(c, result)
@@ -49,10 +50,10 @@ func (h *AdminSystemHandler) VMResource(c *gin.Context) {
 	payload, err := h.vmService.GetResourceByID(c.Request.Context(), c.Param("id"))
 	if err != nil {
 		if service.IsNotFound(err) {
-			fail(c, http.StatusNotFound, 40460, "vm not found")
+			fail(c, http.StatusNotFound, errcode.AdminSystemVMNotFound, "vm not found")
 			return
 		}
-		fail(c, http.StatusBadGateway, 50260, "query vm resource failed")
+		fail(c, http.StatusBadGateway, errcode.AdminSystemVMResourceFailed, "query vm resource failed")
 		return
 	}
 	ok(c, payload)
