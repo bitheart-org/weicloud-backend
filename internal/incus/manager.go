@@ -146,7 +146,6 @@ func (m *Manager) CreateInstance(ctx context.Context, host model.Host, req Insta
 		"config": map[string]string{
 			"limits.cpu":     fmt.Sprintf("%d", req.CPUCores),
 			"limits.memory":  fmt.Sprintf("%d", req.MemoryBytes),
-			"agent":          "enabled",
 			"user.user-data": buildCloudInit(req),
 		},
 		"devices": map[string]map[string]string{
@@ -687,11 +686,17 @@ func (m *Manager) getOperationWebsocketSecret(ctx context.Context, client *hostC
 	if err := json.NewDecoder(resp.Body).Decode(&operationResp); err != nil {
 		return "", fmt.Errorf("decode operation metadata: %w", err)
 	}
-	secret := operationResp.Metadata.Fds["0"]
-	if secret == "" {
-		return "", fmt.Errorf("missing operation websocket secret")
+	for _, key := range []string{"0", "1", "control", "console"} {
+		if secret := operationResp.Metadata.Fds[key]; secret != "" {
+			return secret, nil
+		}
 	}
-	return secret, nil
+	for _, secret := range operationResp.Metadata.Fds {
+		if secret != "" {
+			return secret, nil
+		}
+	}
+	return "", fmt.Errorf("missing operation websocket secret")
 }
 
 func buildOperationWebsocketURL(baseURL, operationPath, secret string) (string, error) {
