@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -55,6 +56,7 @@ func main() {
 	vncWSHandler := handler.NewVNCWSHandler(vmService, vncService)
 
 	router := gin.Default()
+	router.Use(middleware.SecurityHeaders(), middleware.RateLimit(300, time.Minute))
 	handler.RegisterRoutes(router, handler.RouterDeps{
 		AuthHandler:        authHandler,
 		AdminUserHandler:   adminUserHandler,
